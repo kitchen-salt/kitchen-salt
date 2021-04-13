@@ -9,12 +9,12 @@
 #    GIT_FORMULAS_PATH=/usr/share/salt-formulas/env/_formulas
 #    xargs -n1 ./formula-fetch.sh < dependencies.txt
 
-
 # Parse git dependencies from metadata.yml
 # $1 - path to <formula>/metadata.yml
 # sample to output:
 #    https://github.com/salt-formulas/salt-formula-git git
 #    https://github.com/salt-formulas/salt-formula-salt salt
+
 function fetchDependencies() {
     METADATA="$1";
     grep -E "^dependencies:" "$METADATA" >/dev/null || return 0
@@ -30,15 +30,25 @@ function fetchDependencies() {
 # $1 - formula git repo url
 # $2 - formula name (optional)
 # $3 - branch (optional)
+# $4 - path to deploykey
 function fetchGitFormula() {
     test -n "${FETCHED}" || declare -a FETCHED=()
     export GIT_FORMULAS_PATH=${GIT_FORMULAS_PATH:-/usr/share/salt-formulas/env/_formulas}
+
+    if [[ -n $4 ]]
+    then
+        sshbin=$(command -v ssh)
+        export GIT_SSH_COMMAND="${sshbin} -o UserKnownHostsFile=/tmp/kitchen/ssh/known_hosts -o StrictHostKeyChecking=no -i ${4}"
+        export GIT_SSH="/tmp/kitchen/git_ssh.sh"
+    fi
+
     mkdir -p "$GIT_FORMULAS_PATH"
     if [ -n "$1" ]; then
         source="$1"
         name="$2"
         test -n "$name" || name="${source//*salt-formula-}"
         test -z "$3" && branch=master || branch=$3
+
         if ! [[ "${FETCHED[*]}" =~ $name ]]; then # dependency not yet fetched
           echo "Fetching: $name"
           if test -e "$GIT_FORMULAS_PATH/$name"; then
@@ -47,7 +57,7 @@ function fetchGitFormula() {
               popd &>/dev/null || exit
           else
               echo "git clone $source $GIT_FORMULAS_PATH/$name -b $branch"
-              git clone "$source" "$GIT_FORMULAS_PATH/$name" -b "$branch"
+              git clone "$source" "$GIT_FORMULAS_PATH/$name" -b "$branch" || exit 1
           fi
           # install dependencies
           FETCHED+=("$name")

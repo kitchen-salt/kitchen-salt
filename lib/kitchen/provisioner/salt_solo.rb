@@ -77,10 +77,12 @@ module Kitchen
         salt_spm_root: '/srv/spm',
         salt_state_top: '/srv/salt/top.sls',
         salt_version: 'latest',
-        salt_yum_repo_key: 'https://repo.saltproject.io/yum/redhat/$releasever/$basearch/archive/%s/SALTSTACK-GPG-KEY.pub',
-        salt_yum_repo_latest: 'https://repo.saltproject.io/yum/redhat/salt-repo-latest-2.el7.noarch.rpm',
-        salt_yum_repo: 'https://repo.saltproject.io/yum/redhat/$releasever/$basearch/archive/%s',
-        salt_yum_rpm_key: 'https://repo.saltproject.io/yum/redhat/7/x86_64/archive/%s/SALTSTACK-GPG-KEY.pub',
+        salt_yum_repo_key: 'https://repo.saltstack.com/yum/redhat/$releasever/$basearch/archive/%s/SALTSTACK-GPG-KEY.pub',
+        salt_yum_repo_latest: 'https://repo.saltstack.com/yum/redhat/salt-repo-latest-2.el7.noarch.rpm',
+        salt_yum_repo: 'https://repo.saltstack.com/yum/redhat/$releasever/$basearch/archive/%s',
+        salt_yum_rpm_key: 'https://repo.saltstack.com/yum/redhat/7/x86_64/archive/%s/SALTSTACK-GPG-KEY.pub',
+        ssh_home: '/ssh',
+	ssh_key: nil,
         state_collection: false,
         state_top_from_file: false,
         state_top: {},
@@ -429,6 +431,31 @@ module Kitchen
         # sub-directory
         return if windows_os?
 
+        # Write ssh known_hosts
+        write_raw_file(File.join(sandbox_path, config[:ssh_home], "known_hosts"), File.read(File.expand_path("../known_hosts", __FILE__)))
+        # Write general deploy key. 
+        unless config[:ssh_key].nil?
+            outfile = File.join(sandbox_path, config[:ssh_home], File.basename(config[:ssh_key]))
+            contents = File.read(File.expand_path(config[:ssh_key]))
+            if contents.include?("ENCRYPTED")
+              raise("Encrypted key not supported offending key: #{config[:ssh_key]}")
+            end
+            info("Copying #{config[:ssh_key]} to #{outfile}")
+            write_raw_file(outfile, contents)
+        end
+        # Write dependency overridden deploykey
+        config[:dependencies].each do |dependency|
+          unless dependency[:ssh_key].nil? 
+            outfile = File.join(sandbox_path, config[:ssh_home], File.basename(dependency[:ssh_key]))
+            contents = File.read(File.expand_path(dependency[:ssh_key]))
+            if contents.include?("ENCRYPTED")
+              raise("Encrypted key not supported offending key: #{dependency[:ssh_key]}")
+            end
+            info("Copying #{dependency[:ssh_key]} to #{outfile}")
+            write_raw_file(outfile, contents)
+          end
+        end
+
         # upload scripts
         sandbox_scripts_path = File.join(sandbox_path, config[:salt_config], 'scripts')
         info("Preparing scripts into #{config[:salt_config]}/scripts")
@@ -455,7 +482,7 @@ module Kitchen
         end
 
         # upload scripts
-        %w[formula-fetch.sh repository-setup.sh].each do |script|
+        %w[formula-fetch.sh repository-setup.sh git_ssh.sh].each do |script|
           write_raw_file(File.join(sandbox_path, script), File.read(File.expand_path("../#{script}", __FILE__)))
         end
         dependencies_script = File.expand_path('./../dependencies.erb', __FILE__)
