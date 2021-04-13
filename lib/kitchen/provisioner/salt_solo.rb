@@ -275,7 +275,7 @@ module Kitchen
         end
 
         if config[:pre_salt_command]
-          cmd << "#{config[:pre_salt_command]} && "
+          cmd << "( set -x ; #{config[:pre_salt_command]} ) && "
         end
         cmd << sudo("#{salt_call}")
         state_output = config[:salt_minion_extra_config][:state_output]
