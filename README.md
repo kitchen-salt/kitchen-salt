@@ -49,3 +49,5 @@ PR's and other changes should validated using Github Actions, kitchen-docker, mu
     git add stuff
     git commit -v
     gem bump --release --tag
+    gem build kitchen-salt.gemspec
+    gem push kitchen-salt-<version>.gem
